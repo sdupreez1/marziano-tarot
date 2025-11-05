@@ -1,0 +1,13 @@
+{
+    "id": "15th_century_tarot",
+    "name": "15th Century Tarot Cards",
+    "author": ["Seth du Preez", "Elliott Holand"],
+    "description": "Adds a set of tarot cards based on the oldest known relative of tarot cards (the Marziano Tarot) which have a chance to replace the regular tarot cards with a stronger version of the replaced card.",
+    "prefix:": "15Ctar",
+    "badge_colour": "ac0707",
+    "main_file": "15th_century_tarot.lua",
+    "dependencies": [
+        "Steamodded (>=1.0.0~ALPHA-1404b)"
+    ],
+    "version": "1.0.0"
+}
