@@ -38,7 +38,11 @@ ehthumbs.db
 Thumbs.db
 *.swp
 
-# Tests and notes #
+# Hidden files #
+################
+.vscode
+
+# Tests and Notes #
 ###################
 test.*
 note.*
