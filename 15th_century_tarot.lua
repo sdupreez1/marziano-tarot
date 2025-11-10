@@ -60,7 +60,7 @@ SMODS.Consumable({
     },
 
     can_use = function(self, card)
-        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
+        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT and (#G.hand.highlighted > 0 and #G.hand.highlighted <= card.ability.max_highlighted) then
             return true
         end
     end,
@@ -75,7 +75,7 @@ SMODS.Consumable({
         delay(0.2)
         for i=1, #G.hand.highlighted do
             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
-                G.hand.highlighted[i]:set_ability(G.P_CENTERS[self.ability.mod_conv]);
+                G.hand.highlighted[i]:set_ability(G.P_CENTERS[card.ability.consumeable.mod_conv]);
             return true end }))
         end
         for i=1, #G.hand.highlighted do
@@ -205,11 +205,11 @@ SMODS.Consumable({
         suit_conv = 'Spades'
     },    
     loc_vars = function(self, info_queue, card)
-        return { vars = { card.ability.suit_conv } }
+        return { vars = { card.ability.consumeable.suit_conv } }
     end,
 
     calculate = function(self, card, context)
-        if (context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
+        if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
              local suit_counts = {
                         Spades = 0,
                         Hearts = 0,
@@ -241,26 +241,22 @@ SMODS.Consumable({
                 end
             end
             
-            card.ability.suit_conv = most_common_s
+            card.ability.consumeable.suit_conv = most_common_s
 
             return {
                 suit_conv = card.ability.suit_conv,
-                message = localize { type = 'variable', key = 'suits_plural', vars = { card.ability.suit_conv } }
+                message = localize { type = 'suits_plural', key = card.ability.consumeable.suit_conv }
             }
         end
     end,
 
     can_use = function(self, card)
-        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
+        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT and (#G.hand.highlighted > 0 and #G.hand.highlighted <= card.ability.max_highlighted) then
             return true
         end        
     end,
 
     use = function(self, card, area, copier)
-        G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
-            play_sound('tarot1')
-            used_tarot:juice_up(0.3, 0.5)
-            return true end }))
         for i=1, #G.hand.highlighted do
             local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
@@ -270,9 +266,10 @@ SMODS.Consumable({
         delay(0.2)
         for i=1, #G.hand.highlighted do
             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
-                G.hand.highlighted[i]:change_suit(self.ability.suit_conv);
+                G.hand.highlighted[i]:change_suit(card.ability.consumeable.suit_conv);
             return true end }))
         end
+        delay(0.5)
         for i=1, #G.hand.highlighted do
             local percent = 0.85 + (i - 0.999)/(#G.hand.highlighted - 0.998)*0.3
             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
@@ -389,3 +386,69 @@ SMODS.Consumable({
 --     end
 -- })
 
+SMODS.Challenge({
+    key = 'TEST',
+    loc_txt = {
+        name = "TEST"
+    },
+    id = 'c_test_1',
+    rules = {
+        custom = {
+            --{id = 'no_reward'},
+            {id = 'no_reward_specific', value = 'Big'},
+            {id = 'no_extra_hand_money'},
+            {id = 'no_interest'},
+            {id = 'daily'},
+            {id = 'set_seed', value = 'SEEDEEDS'},
+        },
+        modifiers = {
+            {id = 'dollars', value = 100},
+            {id = 'discards', value = 1},
+            {id = 'hands', value = 6},
+            {id = 'reroll_cost', value = 10},
+            {id = 'joker_slots', value = 8},
+            {id = 'consumable_slots', value = 3},
+            {id = 'hand_size', value = 5},
+        }
+    },
+    jokers = {
+        {id = 'j_egg'},
+        {id = 'j_egg'},
+        {id = 'j_egg'},
+        {id = 'j_egg'},
+        {id = 'j_egg', edition = 'foil', eternal = true}
+    },
+    consumeables = {
+        {id = 'c_tarot15C_venus'}
+    },
+    vouchers = {
+        {id = 'v_hieroglyph'},
+    },
+    deck = {
+        -- enhancement = 'm_glass',
+        -- edition = 'foil',
+        -- gold_seal = true,
+        -- yes_ranks = {['3'] = true,T = true},
+        -- no_ranks = {['4'] = true},
+        yes_suits = {H=true},
+        -- no_suits = {D=true},
+        -- cards = {{s='D',r='2',e='m_glass',},{s='D',r='3',e='m_glass',},{s='D',r='4',e='m_glass',},{s='D',r='5',e='m_glass',},{s='D',r='6',e='m_glass',},{s='D',r='7',e='m_glass',},{s='D',r='8',e='m_glass',},{s='D',r='9',e='m_glass',},{s='D',r='T',e='m_glass',},{s='D',r='J',e='m_glass',},{s='D',r='Q',e='m_glass',},{s='D',r='K',e='m_glass',},{s='D',r='A',e='m_glass',},{s='C',r='2',e='m_glass',},{s='C',r='3',e='m_glass',},{s='C',r='4',e='m_glass',},{s='C',r='5',e='m_glass',},{s='C',r='6',e='m_glass',},{s='C',r='7',e='m_glass',},{s='C',r='8',e='m_glass',},{s='C',r='9',e='m_glass',},{s='C',r='T',e='m_glass',},{s='C',r='J',e='m_glass',},{s='C',r='Q',e='m_glass',},{s='C',r='K',e='m_glass',},{s='C',r='A',e='m_glass',},{s='H',r='2',e='m_glass',},{s='H',r='3',e='m_glass',},{s='H',r='4',e='m_glass',},{s='H',r='5',e='m_glass',},{s='H',r='6',e='m_glass',},{s='H',r='7',e='m_glass',},{s='H',r='8',e='m_glass',},{s='H',r='9',e='m_glass',},{s='H',r='T',e='m_glass',},{s='H',r='J',e='m_glass',},{s='H',r='Q',e='m_glass',},{s='H',r='K',e='m_glass',},{s='H',r='A',e='m_glass',},{s='S',r='2',e='m_glass',},{s='S',r='3',e='m_glass',},{s='S',r='4',e='m_glass',},{s='S',r='5',e='m_glass',},{s='S',r='6',e='m_glass',},{s='S',r='7',e='m_glass',},{s='S',r='8',e='m_glass',},{s='S',r='9',e='m_glass',},{s='S',r='T',e='m_glass',},{s='S',r='J',e='m_glass',},{s='S',r='Q',e='m_glass',},{s='S',r='K',e='m_glass',},{s='S',r='A',e='m_glass',},},
+        type = 'Challenge Deck'
+    },
+    restrictions = {
+        banned_cards = {
+            {id = 'j_joker'},
+            {id = 'j_egg'},
+        },
+        banned_tags = {
+            {id = 'tag_garbage'},
+            {id = 'tag_handy'},
+        },
+        banned_other = {
+            {id = 'bl_wall', type = 'blind'}
+        }
+    },
+    unlocked = function(self)
+        return true
+    end
+})
