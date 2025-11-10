@@ -222,7 +222,7 @@ SMODS.Consumable({
             "Converts {C:attention}3{}",
             "selected cards to",
             "your top suit",
-            "{C:inactive}(currently #1#){}" -- get this to display a suit symbol
+            "{C:inactive}(currently #1#){}"
         }
     },
     config = {
@@ -360,30 +360,56 @@ SMODS.Consumable({
 --     end
 -- })
 
--- SMODS.Consumable({
---     set = "Tarot", key = "diana", cost = 10, discovered = true,
---     atlas = "15C_tarot",
---     pos = {
---         x = 6,
---         y = 0
---     },
---     loc_txt = {
---         name = 'Diana',
-        -- text = {
-        --     "Enhances {C:attention}3{} selected cards to {C:attention}Wild Cards{}"
-        -- }
---     },
---     config = {},
---     loc_vars = function(self, info_queue, card)
+SMODS.Consumable({
+    set = "Tarot", key = "diana", cost = 10, discovered = true,
+    atlas = "15C_tarot",
+    pos = {
+        x = 6,
+        y = 0
+    },
+    loc_txt = {
+        name = 'Diana',
+        text = {
+            "Enhances {C:attention}3{}",
+            "selected cards to",
+            "{C:attention}Wild Cards{}"
+        }
+    },
+    config = {
+        max_highlighted = 3,
+        mod_conv = 'm_wild'
+    },
+    can_use = function(self, card)
+        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT and (#G.hand.highlighted > 0 and #G.hand.highlighted <= card.ability.max_highlighted) then
+            return true
+        end
+    end,
 
---     end,
---     can_use = function(self, card)
-    
---     end,
---     use = function(self, card, area, copier)
-    
---     end
--- })
+    use = function(self, card, area, copier)
+        for i=1, #G.hand.highlighted do
+            local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
+                G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);
+            return true end }))
+        end
+        delay(0.2)
+        for i=1, #G.hand.highlighted do
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
+                G.hand.highlighted[i]:set_ability(G.P_CENTERS[card.ability.consumeable.mod_conv]);
+            return true end }))
+        end
+        for i=1, #G.hand.highlighted do
+            local percent = 0.85 + (i - 0.999)/(#G.hand.highlighted - 0.998)*0.3
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
+                G.hand.highlighted[i]:flip(); play_sound('tarot2', percent, 0.6); G.hand.highlighted[i]:juice_up(0.3, 0.3);
+            return true end }))
+        end
+        G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+            G.hand:unhighlight_all();
+        return true end }))
+        delay(0.5)
+    end
+})
 
 -- SMODS.Consumable({
 --     set = "Tarot", key = "bacco", cost = 10, discovered = true,
@@ -444,7 +470,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_tarot15C_pallas'}
+        {id = 'c_tarot15C_diana'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
