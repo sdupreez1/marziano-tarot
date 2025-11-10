@@ -108,6 +108,12 @@ SMODS.Consumable({
         }
     },
 
+    config = { 
+        max_highlighted = 2,
+        rank_conv = 14,
+        rank_conv_value = 'Ace'
+    },
+
     calculate = function(self, card, context)
         if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
             local rank_counts = {} -- this will have keys 2 to 14 (Ace=14, K=13, Q=12, J=11)
@@ -137,7 +143,6 @@ SMODS.Consumable({
             end
             
             card.ability.consumeable.rank_conv = most_common_r
-
             local rank_suffix = card.ability.consumeable.rank_conv
             if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
             elseif rank_suffix == 10 then rank_suffix = 'T'
@@ -150,12 +155,6 @@ SMODS.Consumable({
 
         end
     end,
-    
-    config = { 
-        max_highlighted = 2,
-        rank_conv = 14,
-        rank_conv_value = 'Ace'
-    },
 
     loc_vars = function(self, info_queue, card)
         return { vars = { 
@@ -206,6 +205,7 @@ SMODS.Consumable({
         G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
             G.hand:unhighlight_all();
         return true end }))
+        delay(0.5)
     end
 })
 
@@ -335,30 +335,147 @@ SMODS.Consumable({
 --     end
 -- })
 
--- SMODS.Consumable({
---     set = "Tarot", key = "nettuno", cost = 10, discovered = true,
---     atlas = "15C_tarot",
---     pos = {
---         x = 5,
---         y = 0
---     },
---     loc_txt = {
---         name = 'Nettuno',
-        -- text = {
-        --     "Select 2 cards, convert both to the most common card in your deck (currently <suit><number>)"
-        -- }
---     },
---     config = {},
---     loc_vars = function(self, info_queue, card)
+SMODS.Consumable({
+    set = "Tarot", key = "nettuno", cost = 10, discovered = true,
+    atlas = "15C_tarot",
+    pos = {
+        x = 5,
+        y = 0
+    },
+    loc_txt = {
+        name = 'Nettuno',
+        text = {
+            "Select {C:attention}#1#{} cards,",
+            "convert both to your",
+            "most common card",
+            "{C:inactive}(currently #2# of #3#)"
+        }
+    },
+    config = {
+        max_highlighted = 2,
+        suit_conv = 'Spades',
+        rank_conv = 14,
+        rank_conv_value = 'Ace'
+    },    
+    loc_vars = function(self, info_queue, card)
+        return { vars = { 
+                card.ability.consumeable.max_highlighted,
+                card.ability.consumeable.rank_conv_value,
+                card.ability.consumeable.suit_conv
+            } 
+        }
+    end,
 
---     end,
---     can_use = function(self, card)
-    
---     end,
---     use = function(self, card, area, copier)
-    
---     end
--- })
+    calculate = function(self, card, context)
+        if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
+             local suit_counts = {
+                        Spades = 0,
+                        Hearts = 0,
+                        Clubs = 0,
+                        Diamonds = 0
+                    }
+            local rank_counts = {}
+            local stones = nil
+            for k, v in ipairs(G.playing_cards) do
+                if v.ability.effect == 'Stone Card' then
+                    stones = stones or 0
+                end
+                if (v.area and v.area == G.deck) then -- removed  `or v.ability.wheel_flipped` from the if statement, not sure if it affects what gets counted
+                    if v.ability.effect == 'Stone Card' then
+                        stones = stones + 1
+                    else
+                        -- for suit, count in pairs(suit_counts) do
+                        --     if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
+                        -- end
+                        suit_counts[v.base.suit] = suit_counts[v.base.suit] + 1
+                        rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
+                    end
+                end
+            end
+
+            local most_common_s, most_common_count = next(suit_counts)
+            for suit, count in next, suit_counts, most_common_s do
+                if count > most_common_count then
+                    most_common_s = suit
+                end
+            end
+
+            local most_common_r, most_common_count = next(rank_counts)
+            for rank, count in next, rank_counts, most_common_r do
+                if count > most_common_count then
+                    most_common_r = rank
+                elseif count == most_common_count then
+                    if  rank > most_common_r then
+                        most_common_r = rank
+                    end
+                end
+            end
+            
+            card.ability.consumeable.suit_conv = most_common_s
+            card.ability.consumeable.rank_conv = most_common_r
+            local rank_suffix = card.ability.consumeable.rank_conv
+            if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
+            elseif rank_suffix == 10 then rank_suffix = 'T'
+            elseif rank_suffix == 11 then rank_suffix = 'J'
+            elseif rank_suffix == 12 then rank_suffix = 'Q'
+            elseif rank_suffix == 13 then rank_suffix = 'K'
+            elseif rank_suffix == 14 then rank_suffix = 'A'
+            end
+            card.ability.consumeable.rank_conv_value = G.P_CARDS['H_'..rank_suffix].value -- no important reason why `H_` is used, just the first suit in the P_CARDS table
+
+        end
+    end,
+
+    can_use = function(self, card)
+        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT and (#G.hand.highlighted > 0 and #G.hand.highlighted <= card.ability.max_highlighted) then
+            return true
+        end        
+    end,
+
+    use = function(self, card, area, copier)
+        for i=1, #G.hand.highlighted do
+            local percent = 1.15 - (i-0.999)/(#G.hand.highlighted-0.998)*0.3
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
+                G.hand.highlighted[i]:flip();play_sound('card1', percent);G.hand.highlighted[i]:juice_up(0.3, 0.3);
+            return true end }))
+        end
+        delay(0.2)
+        for i=1, #G.hand.highlighted do
+            -- Change rank...
+            local changing_card = G.hand.highlighted[i]
+            local suit_prefix = string.sub(changing_card.base.suit, 1, 1)..'_'
+            local rank_suffix = card.ability.consumeable.rank_conv
+
+            if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
+            elseif rank_suffix == 10 then rank_suffix = 'T'
+            elseif rank_suffix == 11 then rank_suffix = 'J'
+            elseif rank_suffix == 12 then rank_suffix = 'Q'
+            elseif rank_suffix == 13 then rank_suffix = 'K'
+            elseif rank_suffix == 14 then rank_suffix = 'A'
+            end
+
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
+                G.hand.highlighted[i]:set_base(G.P_CARDS[suit_prefix..rank_suffix]);
+            return true end }))
+            
+            -- ...Then change suit
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.1, func = function()
+                G.hand.highlighted[i]:change_suit(card.ability.consumeable.suit_conv);
+            return true end }))
+        end
+        delay(0.5)
+        for i=1, #G.hand.highlighted do
+            local percent = 0.85 + (i - 0.999)/(#G.hand.highlighted - 0.998)*0.3
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.15, func = function()
+                G.hand.highlighted[i]:flip(); play_sound('tarot2', percent, 0.6); G.hand.highlighted[i]:juice_up(0.3, 0.3);
+            return true end }))
+        end
+        G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.2, func = function()
+            G.hand:unhighlight_all();
+        return true end }))
+        delay(0.5)
+    end
+})
 
 SMODS.Consumable({
     set = "Tarot", key = "diana", cost = 10, discovered = true,
@@ -458,7 +575,7 @@ SMODS.Challenge({
             {id = 'hands', value = 6},
             {id = 'reroll_cost', value = 10},
             {id = 'joker_slots', value = 8},
-            {id = 'consumable_slots', value = 3},
+            {id = 'consumable_slots', value = 8},
             {id = 'hand_size', value = 5},
         }
     },
@@ -470,7 +587,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_tarot15C_diana'}
+        {id = 'c_tarot15C_nettuno'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
@@ -481,9 +598,9 @@ SMODS.Challenge({
         -- gold_seal = true,
         -- yes_ranks = {['3'] = true,T = true},
         -- no_ranks = {['4'] = true},
-        yes_suits = {H=true},
+        -- yes_suits = {H=true},
         -- no_suits = {D=true},
-        -- cards = {{s='D',r='2',e='m_glass',},{s='D',r='3',e='m_glass',},{s='D',r='4',e='m_glass',},{s='D',r='5',e='m_glass',},{s='D',r='6',e='m_glass',},{s='D',r='7',e='m_glass',},{s='D',r='8',e='m_glass',},{s='D',r='9',e='m_glass',},{s='D',r='T',e='m_glass',},{s='D',r='J',e='m_glass',},{s='D',r='Q',e='m_glass',},{s='D',r='K',e='m_glass',},{s='D',r='A',e='m_glass',},{s='C',r='2',e='m_glass',},{s='C',r='3',e='m_glass',},{s='C',r='4',e='m_glass',},{s='C',r='5',e='m_glass',},{s='C',r='6',e='m_glass',},{s='C',r='7',e='m_glass',},{s='C',r='8',e='m_glass',},{s='C',r='9',e='m_glass',},{s='C',r='T',e='m_glass',},{s='C',r='J',e='m_glass',},{s='C',r='Q',e='m_glass',},{s='C',r='K',e='m_glass',},{s='C',r='A',e='m_glass',},{s='H',r='2',e='m_glass',},{s='H',r='3',e='m_glass',},{s='H',r='4',e='m_glass',},{s='H',r='5',e='m_glass',},{s='H',r='6',e='m_glass',},{s='H',r='7',e='m_glass',},{s='H',r='8',e='m_glass',},{s='H',r='9',e='m_glass',},{s='H',r='T',e='m_glass',},{s='H',r='J',e='m_glass',},{s='H',r='Q',e='m_glass',},{s='H',r='K',e='m_glass',},{s='H',r='A',e='m_glass',},{s='S',r='2',e='m_glass',},{s='S',r='3',e='m_glass',},{s='S',r='4',e='m_glass',},{s='S',r='5',e='m_glass',},{s='S',r='6',e='m_glass',},{s='S',r='7',e='m_glass',},{s='S',r='8',e='m_glass',},{s='S',r='9',e='m_glass',},{s='S',r='T',e='m_glass',},{s='S',r='J',e='m_glass',},{s='S',r='Q',e='m_glass',},{s='S',r='K',e='m_glass',},{s='S',r='A',e='m_glass',},},
+        cards = {{s='D',r='2',e='m_glass',},{s='D',r='3',e='m_glass',},{s='D',r='4',e='m_glass',},{s='D',r='5',e='m_glass',},{s='D',r='6',e='m_glass',},{s='D',r='7',e='m_glass',},{s='D',r='8',e='m_glass',},{s='D',r='9',e='m_glass',},{s='D',r='T',e='m_glass',},{s='D',r='J',e='m_glass',},{s='D',r='Q',e='m_glass',},{s='D',r='K',e='m_glass',},{s='D',r='A',e='m_glass',},{s='C',r='2',e='m_glass',},{s='C',r='3',e='m_glass',},{s='C',r='4',e='m_glass',},{s='C',r='5',e='m_glass',},{s='C',r='6',e='m_glass',},{s='C',r='7',e='m_glass',},{s='C',r='8',e='m_glass',},{s='C',r='9',e='m_glass',},{s='C',r='T',e='m_glass',},{s='C',r='J',e='m_glass',},{s='C',r='Q',e='m_glass',},{s='C',r='K',e='m_glass',},{s='C',r='A',e='m_glass',},{s='H',r='2',e='m_glass',},{s='H',r='3',e='m_glass',},{s='H',r='4',e='m_glass',},{s='H',r='5',e='m_glass',},{s='H',r='6',e='m_glass',},{s='H',r='7',e='m_glass',},{s='H',r='8',e='m_glass',},{s='H',r='9',e='m_glass',},{s='H',r='T',e='m_glass',},{s='H',r='J',e='m_glass',},{s='H',r='Q',e='m_glass',},{s='H',r='K',e='m_glass',},{s='H',r='A',e='m_glass',},{s='S',r='2',e='m_glass',},{s='S',r='3',e='m_glass',},{s='S',r='4',e='m_glass',},{s='S',r='5',e='m_glass',},{s='S',r='6',e='m_glass',},{s='S',r='7',e='m_glass',},{s='S',r='8',e='m_glass',},{s='S',r='9',e='m_glass',},{s='S',r='T',e='m_glass',},{s='S',r='J',e='m_glass',},{s='S',r='Q',e='m_glass',},{s='S',r='K',e='m_glass',},{s='S',r='A',e='m_glass',},},
         type = 'Challenge Deck'
     },
     restrictions = {
