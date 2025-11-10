@@ -528,31 +528,70 @@ SMODS.Consumable({
     end
 })
 
--- SMODS.Consumable({
---     set = "Tarot", key = "bacco", cost = 10, discovered = true,
---     atlas = "15C_tarot",    
---     pos = {
---         x = 7,
---         y = 0
---     },
+SMODS.Consumable({
+    set = "Tarot", key = "bacco", cost = 10, discovered = true,
+    atlas = "15C_tarot",    
+    pos = {
+        x = 7,
+        y = 0
+    },
 
---     loc_txt = {
---         name = 'Bacco',
-        -- text = {
-        --     "Spend total sell value of all current Jokers ($<total_cost>) to add negative to a random Joker"
-        -- }
---     },
---     config = {},
---     loc_vars = function(self, info_queue, card)
+    loc_txt = {
+        name = 'Bacco',
+        text = {
+            "Spend total sell value",
+            "of all current Jokers",
+            "{C:inactive}({C:money}$#1#{C:inactive}){} to add {C:dark_edition}negative{} to",
+            "a random Joker"
+        }
+    },
+    
+    config = {
+        money = 0,
+        eligible_editionless_jokers = nil
+    },
 
---     end,
---     can_use = function(self, card)
-    
---     end,
---     use = function(self, card, area, copier)
-    
---     end
--- })
+    loc_vars = function(self, info_queue, card)
+        return {
+            vars ={
+                card.ability.consumeable.money
+            }
+        }
+    end,
+
+    calculate = function(self, card, context)
+        card.ability.consumeable.eligible_editionless_jokers = EMPTY(card.ability.consumeable.eligible_editionless_jokers)
+        for k, v in pairs(G.jokers.cards) do
+            if v.ability.set == 'Joker' and (not v.edition) then
+                table.insert(card.ability.consumeable.eligible_editionless_jokers, v)
+            end
+        end
+
+        card.ability.consumeable.money = 0
+        for i = 1, #G.jokers.cards do
+            if G.jokers.cards[i].ability.set == 'Joker' then
+                card.ability.consumeable.money = card.ability.consumeable.money + G.jokers.cards[i].sell_cost
+            end
+        end
+    end,
+
+    can_use = function(self, card)
+        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
+            return true
+        end        
+    end,
+
+    use = function(self, card, area, copier)
+    G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
+                local temp_pool = card.ability.consumeable.eligible_editionless_jokers
+                local eligible_card = pseudorandom_element( temp_pool, pseudoseed('bacco') )
+                local edition = {negative = true}
+                eligible_card:set_edition(edition, true)
+                check_for_unlock({type = 'have_edition'})
+                card:juice_up(0.3, 0.5)
+            return true end }))
+    end
+})
 
 SMODS.Challenge({
     key = 'TEST',
@@ -587,7 +626,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_tarot15C_nettuno'}
+        {id = 'c_tarot15C_bacco'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
