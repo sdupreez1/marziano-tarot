@@ -15,8 +15,8 @@ SMODS.Consumable({
     loc_txt = {
         name = 'Giove',
         text = {
-            "Creates 2 random {C:781e0c}Marziano{}", -- this might cause problems
-            "{C:attention}Tarot Cards{}",
+            "Creates 2 random ",
+            "{C:spades}Marziano Tarot{} cards",
             "{C:inactive}(if there is room){}"
         }
     },
@@ -24,24 +24,24 @@ SMODS.Consumable({
         max_tarots = 2,
         marz = true
     },
-    loc_vars = function(self, info_queue, card)
-
-    end,
     can_use = function(self, card)
-    
+         if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
+            return true
+        end
     end,
     use = function(self, card, area, copier)
         for i = 1, math.min(card.ability.consumeable.max_tarots, ( G.consumeables.config.card_limit - #G.consumeables.cards )) do
             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
                 if G.consumeables.config.card_limit > #G.consumeables.cards then
                     play_sound('timpani')
-                    local new_card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil,'emp')
-                    if new_card then
-
+                    local new_card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil,'giove')
+                    while not new_card.ability.consumeable.marz do
+                        new_card:remove()
+                        new_card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil,'giove')
                     end
-                    card:add_to_deck()
-                    G.consumeables:emplace(card)
-                    used_tarot:juice_up(0.3, 0.5)
+                    new_card:add_to_deck()
+                    G.consumeables:emplace(new_card)
+                    card:juice_up(0.3, 0.5)
                 end
                 return true end }))
         end
@@ -543,71 +543,72 @@ SMODS.Consumable({
     end
 })
 
-SMODS.Consumable({
-    set = "Tarot", key = "bacco", cost = 10, discovered = true,
-    atlas = "15C_tarot",    
-    pos = {
-        x = 7,
-        y = 0
-    },
+-- Currently causes stack overflow when used (at least after adding giove and config.marz=true) - error mentions not being able to find main.lua
+-- SMODS.Consumable({
+--     set = "Tarot", key = "bacco", cost = 10, discovered = true,
+--     atlas = "15C_tarot",    
+--     pos = {
+--         x = 7,
+--         y = 0
+--     },
 
-    loc_txt = {
-        name = 'Bacco',
-        text = {
-            "Spend total sell value",
-            "of all current Jokers",
-            "{C:inactive}({C:money}$#1#{C:inactive}){} to add {C:dark_edition}negative{} to",
-            "a random Joker"
-        }
-    },
+--     loc_txt = {
+--         name = 'Bacco',
+--         text = {
+--             "Spend total sell value",
+--             "of all current Jokers",
+--             "{C:inactive}({C:money}$#1#{C:inactive}){} to add {C:dark_edition}negative{} to",
+--             "a random Joker"
+--         }
+--     },
     
-    config = {
-        money = 0,
-        eligible_editionless_jokers = nil,
-        marz = true
-    },
+--     config = {
+--         money = 0,
+--         eligible_editionless_jokers = nil,
+--         marz = true
+--     },
 
-    loc_vars = function(self, info_queue, card)
-        return {
-            vars ={
-                card.ability.consumeable.money
-            }
-        }
-    end,
+--     loc_vars = function(self, info_queue, card)
+--         return {
+--             vars ={
+--                 card.ability.consumeable.money
+--             }
+--         }
+--     end,
 
-    calculate = function(self, card, context)
-        card.ability.consumeable.eligible_editionless_jokers = EMPTY(card.ability.consumeable.eligible_editionless_jokers)
-        for k, v in pairs(G.jokers.cards) do
-            if v.ability.set == 'Joker' and (not v.edition) then
-                table.insert(card.ability.consumeable.eligible_editionless_jokers, v)
-            end
-        end
+--     calculate = function(self, card, context)
+--         card.ability.consumeable.eligible_editionless_jokers = EMPTY(card.ability.consumeable.eligible_editionless_jokers)
+--         for k, v in pairs(G.jokers.cards) do
+--             if v.ability.set == 'Joker' and (not v.edition) then
+--                 table.insert(card.ability.consumeable.eligible_editionless_jokers, v)
+--             end
+--         end
 
-        card.ability.consumeable.money = 0
-        for i = 1, #G.jokers.cards do
-            if G.jokers.cards[i].ability.set == 'Joker' then
-                card.ability.consumeable.money = card.ability.consumeable.money + G.jokers.cards[i].sell_cost
-            end
-        end
-    end,
+--         card.ability.consumeable.money = 0
+--         for i = 1, #G.jokers.cards do
+--             if G.jokers.cards[i].ability.set == 'Joker' then
+--                 card.ability.consumeable.money = card.ability.consumeable.money + G.jokers.cards[i].sell_cost
+--             end
+--         end
+--     end,
 
-    can_use = function(self, card)
-        if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
-            return true
-        end        
-    end,
+--     can_use = function(self, card)
+--         if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
+--             return true
+--         end        
+--     end,
 
-    use = function(self, card, area, copier)
-    G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
-                local temp_pool = card.ability.consumeable.eligible_editionless_jokers
-                local eligible_card = pseudorandom_element( temp_pool, pseudoseed('bacco') )
-                local edition = {negative = true}
-                eligible_card:set_edition(edition, true)
-                check_for_unlock({type = 'have_edition'})
-                card:juice_up(0.3, 0.5)
-            return true end }))
-    end
-})
+--     use = function(self, card, area, copier)
+--     G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
+--                 local temp_pool = card.ability.consumeable.eligible_editionless_jokers
+--                 local eligible_card = pseudorandom_element( temp_pool, pseudoseed('bacco') )
+--                 local edition = {negative = true}
+--                 eligible_card:set_edition(edition, true)
+--                 check_for_unlock({type = 'have_edition'})
+--                 card:juice_up(0.3, 0.5)
+--             return true end }))
+--     end
+-- })
 
 SMODS.Challenge({
     key = 'TEST',
@@ -642,7 +643,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_15Ctarot_bacco'}
+        {id = 'c_15Ctarot_giove'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
