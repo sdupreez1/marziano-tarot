@@ -5,41 +5,48 @@ SMODS.Atlas {
     py = 95
 }
 
--- -- This will need a new 15C set to be created to create specifically 15C tarots --
--- SMODS.Consumable({
---     set = "Tarot", key = "giove", cost = 10, discovered = true,
---     atlas = "15C_tarot",
---     pos = {
---         x = 0,
---         y = 0
---     },
---     loc_txt = {
---         name = 'Giove',
-        -- text = {
-        --     "Creates 2 random 15C Tarot Cards"
-        -- }
---     },
---     config = {},
---     loc_vars = function(self, info_queue, card)
+SMODS.Consumable({
+    set = "Tarot", key = "giove", cost = 10, discovered = true,
+    atlas = "15C_tarot",
+    pos = {
+        x = 0,
+        y = 0
+    },
+    loc_txt = {
+        name = 'Giove',
+        text = {
+            "Creates 2 random {C:781e0c}Marziano{}", -- this might cause problems
+            "{C:attention}Tarot Cards{}",
+            "{C:inactive}(if there is room){}"
+        }
+    },
+    config = {
+        max_tarots = 2,
+        marz = true
+    },
+    loc_vars = function(self, info_queue, card)
 
---     end,
---     can_use = function(self, card)
+    end,
+    can_use = function(self, card)
     
---     end,
---     use = function(self, card, area, copier)
---         for i = 1, math.min((self.ability.consumeable.tarots or self.ability.consumeable.planets), G.consumeables.config.card_limit - #G.consumeables.cards) do
---             G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
---                 if G.consumeables.config.card_limit > #G.consumeables.cards then
---                     play_sound('timpani')
---                     local card = create_card((self.ability.name == 'The Emperor' and 'Tarot'), G.consumeables, nil, nil, nil, nil, nil, (self.ability.name == 'The Emperor' and 'emp'))
---                     card:add_to_deck()
---                     G.consumeables:emplace(card)
---                     used_tarot:juice_up(0.3, 0.5)
---                 end
---                 return true end }))
---         end
---     end
--- })
+    end,
+    use = function(self, card, area, copier)
+        for i = 1, math.min(card.ability.consumeable.max_tarots, ( G.consumeables.config.card_limit - #G.consumeables.cards )) do
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
+                if G.consumeables.config.card_limit > #G.consumeables.cards then
+                    play_sound('timpani')
+                    local new_card = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil,'emp')
+                    if new_card then
+
+                    end
+                    card:add_to_deck()
+                    G.consumeables:emplace(card)
+                    used_tarot:juice_up(0.3, 0.5)
+                end
+                return true end }))
+        end
+    end
+})
 
 SMODS.Consumable({
     set = "Tarot", key = "giunone", cost = 10, discovered = true, atlas = "15C_tarot", 
@@ -56,7 +63,8 @@ SMODS.Consumable({
     },
     config = {
         max_highlighted = 3, 
-        mod_conv = 'm_mult'
+        mod_conv = 'm_mult',
+        marz = true
     },
 
     can_use = function(self, card)
@@ -111,7 +119,8 @@ SMODS.Consumable({
     config = { 
         max_highlighted = 2,
         rank_conv = 14,
-        rank_conv_value = 'Ace'
+        rank_conv_value = 'Ace',
+        marz = true
     },
 
     calculate = function(self, card, context)
@@ -227,7 +236,8 @@ SMODS.Consumable({
     },
     config = {
         max_highlighted = 3,
-        suit_conv = 'Spades'
+        suit_conv = 'Spades',
+        marz = true
     },    
     loc_vars = function(self, info_queue, card)
         return { vars = { card.ability.consumeable.suit_conv } }
@@ -308,6 +318,7 @@ SMODS.Consumable({
     end
 })
 
+-- WIP
 SMODS.Consumable({
     set = "Tarot", key = "apollo", cost = 10, discovered = true,
     atlas = "15C_tarot",    
@@ -318,10 +329,11 @@ SMODS.Consumable({
     loc_txt = {
         name = 'Apollo',
         text = {
-            "Disable current boss blind"
+            "Disables current",
+            "boss blind"
         }
     },
-    config = {},
+    config = { marz = true },
 
     can_use = function(self, card)
         if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT then
@@ -330,11 +342,12 @@ SMODS.Consumable({
     end,
 
     
-    use = function(self, card, area, copier)
+    use = function(self, card, area, copier) 
     
     end
 })
 
+-- need to localise suit_conv
 SMODS.Consumable({
     set = "Tarot", key = "nettuno", cost = 10, discovered = true,
     atlas = "15C_tarot",
@@ -355,7 +368,8 @@ SMODS.Consumable({
         max_highlighted = 2,
         suit_conv = 'Spades',
         rank_conv = 14,
-        rank_conv_value = 'Ace'
+        rank_conv_value = 'Ace',
+        marz = true
     },    
     loc_vars = function(self, info_queue, card)
         return { vars = { 
@@ -494,7 +508,8 @@ SMODS.Consumable({
     },
     config = {
         max_highlighted = 3,
-        mod_conv = 'm_wild'
+        mod_conv = 'm_wild',
+        marz = true
     },
     can_use = function(self, card)
         if G.STATE ~= G.STATES.HAND_PLAYED and G.STATE ~= G.STATES.DRAW_TO_HAND and G.STATE ~= G.STATES.PLAY_TAROT and (#G.hand.highlighted > 0 and #G.hand.highlighted <= card.ability.max_highlighted) then
@@ -548,7 +563,8 @@ SMODS.Consumable({
     
     config = {
         money = 0,
-        eligible_editionless_jokers = nil
+        eligible_editionless_jokers = nil,
+        marz = true
     },
 
     loc_vars = function(self, info_queue, card)
@@ -626,7 +642,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_tarot15C_bacco'}
+        {id = 'c_15Ctarot_bacco'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
