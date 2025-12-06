@@ -6,7 +6,7 @@ SMODS.Atlas {
 }
 
 SMODS.Consumable({
-    set = "Tarot", key = "giove", cost = 10, discovered = true,
+    set = "Tarot", key = "giove", cost = 6, discovered = true,
     atlas = "15C_tarot",
     pos = {
         x = 0,
@@ -49,7 +49,7 @@ SMODS.Consumable({
 })
 
 SMODS.Consumable({
-    set = "Tarot", key = "giunone", cost = 10, discovered = true, atlas = "15C_tarot", 
+    set = "Tarot", key = "giunone", cost = 6, discovered = true, atlas = "15C_tarot", 
     pos = {
         x = 1,
         y = 0
@@ -100,7 +100,7 @@ SMODS.Consumable({
 })
 
 SMODS.Consumable({
-    set = "Tarot", key = "pallas", cost = 10, discovered = true,
+    set = "Tarot", key = "pallas", cost = 6, discovered = true,
     atlas = "15C_tarot",
     pos = {
         x = 2,
@@ -124,34 +124,55 @@ SMODS.Consumable({
     },
 
     calculate = function(self, card, context)
-        if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
-            local rank_counts = {} -- this will have keys 2 to 14 (Ace=14, K=13, Q=12, J=11)
+        if (context.drawing_cards 
+            or context.using_consumeable 
+            or context.playing_card_added 
+            or context.card_added 
+            or context.remove_playing_cards 
+            or context.destroy_card
+            or context.buying_card
+            or context.selling_card
+            or context.open_booster
+            or context.skipping_booster
+            or context.reroll_shop
+            or context.ending_shop
+            or context.change_rank
+            or context.change_suit
+            or context.rank_increase) then 
+            sendDebugMessage("Now entering pallas calculate function (context check passed)", "PallasCalc")
+            local rank_counts = {} -- this will have keys 2 to 14 (A=14, K=13, Q=12, J=11)
             local stones = nil
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
                     stones = stones or 0
                 end
-                if (v.area and v.area == G.deck) then -- removed `or v.ability.wheel_flipped` from the if statement, not sure if it affects what gets counted
-                    if v.ability.effect == 'Stone Card' then
-                        stones = stones + 1
-                    else
-                        rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
-                    end
+                if v.ability.effect == 'Stone Card' then
+                    stones = stones + 1
+                else
+                    rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
                 end
             end
 
-            local most_common_r, most_common_count = next(rank_counts)
-            for rank, count in next, rank_counts, most_common_r do
-                if count > most_common_count then
-                    most_common_r = rank
-                elseif count == most_common_count then
-                    if  rank > most_common_r then -- accounts for KQJA since we are using <playing_card>.base.id (an int), not <playing_card>.base.value (a string)
-                        most_common_r = rank
+            local most_common_rank, most_common_rank_count = next(rank_counts)
+            for rank, count in next, rank_counts do
+                if count > most_common_rank_count then
+                    sendDebugMessage("count = "..count, "PallasCalc")
+                    sendDebugMessage("most_common_rank_count = "..most_common_rank_count, "PallasCalc")
+                    most_common_rank = rank
+                    sendDebugMessage("Updated most_common_rank to "..rank, "PallasCalc")
+                    sendDebugMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
+                elseif count == most_common_rank_count then
+                    if  rank > most_common_rank then -- accounts for KQJA since we are using <playing_card>.base.id (an int), not <playing_card>.base.value (a string)
+                        sendDebugMessage("rank = "..rank, "PallasCalc")
+                        sendDebugMessage("most_common_rank = "..most_common_rank, "PallasCalc")
+                        most_common_rank = rank
+                        sendDebugMessage("Updated most_common_rank to "..rank, "PallasCalc")
+                        sendDebugMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
                     end
                 end
             end
             
-            card.ability.consumeable.rank_conv = most_common_r
+            card.ability.consumeable.rank_conv = most_common_rank
             local rank_suffix = card.ability.consumeable.rank_conv
             if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
             elseif rank_suffix == 10 then rank_suffix = 'T'
@@ -160,7 +181,15 @@ SMODS.Consumable({
             elseif rank_suffix == 13 then rank_suffix = 'K'
             elseif rank_suffix == 14 then rank_suffix = 'A'
             end
+
+            sendDebugMessage("rank : count", "PallasCalc")
+            for k, v in next, rank_counts do
+                sendDebugMessage(k.." : "..v, "PallasCalc")
+            end
+
             card.ability.consumeable.rank_conv_value = G.P_CARDS['H_'..rank_suffix].value
+
+            sendDebugMessage("Current max card: "..card.ability.consumeable.rank_conv_value, "PallasCalc")
 
         end
     end,
@@ -219,7 +248,7 @@ SMODS.Consumable({
 })
 
 SMODS.Consumable({
-    set = "Tarot", key = "venus", cost = 10, discovered = true,
+    set = "Tarot", key = "venus", cost = 6, discovered = true,
     atlas = "15C_tarot",
     pos = {
         x = 3,
@@ -256,21 +285,19 @@ SMODS.Consumable({
                 if v.ability.effect == 'Stone Card' then
                     stones = stones or 0
                 end
-                if (v.area and v.area == G.deck) then -- removed  `or v.ability.wheel_flipped` from the if statement, not sure if it affects what gets counted
-                    if v.ability.effect == 'Stone Card' then
-                        stones = stones + 1
-                    else
-                        for suit, count in pairs(suit_counts) do
-                            if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
-                            -- removed the same as above^ that increased mod_suit_counts, not sure what the difference is
-                        end
+                if v.ability.effect == 'Stone Card' then
+                    stones = stones + 1
+                else
+                    for suit, count in pairs(suit_counts) do
+                        if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
+                        -- removed the same as above^ that increased mod_suit_counts, not sure what the difference is
                     end
                 end
             end
 
-            local most_common_s, most_common_count = next(suit_counts)
+            local most_common_s, most_common_rank_count = next(suit_counts)
             for suit, count in next, suit_counts, most_common_s do
-                if count > most_common_count then
+                if count > most_common_rank_count then
                     most_common_s = suit
                 -- by not accounting for the == case, implicitly ranks suits by order in suit_counts (i.e S > H > C > D)
                 end
@@ -320,7 +347,7 @@ SMODS.Consumable({
 
 -- WIP
 SMODS.Consumable({
-    set = "Tarot", key = "apollo", cost = 10, discovered = true,
+    set = "Tarot", key = "apollo", cost = 6, discovered = true,
     atlas = "15C_tarot",    
     pos = {
         x = 4,
@@ -349,7 +376,7 @@ SMODS.Consumable({
 
 -- need to localise suit_conv
 SMODS.Consumable({
-    set = "Tarot", key = "nettuno", cost = 10, discovered = true,
+    set = "Tarot", key = "nettuno", cost = 6, discovered = true,
     atlas = "15C_tarot",
     pos = {
         x = 5,
@@ -407,18 +434,18 @@ SMODS.Consumable({
                 end
             end
 
-            local most_common_s, most_common_count = next(suit_counts)
+            local most_common_s, most_common_rank_count = next(suit_counts)
             for suit, count in next, suit_counts, most_common_s do
-                if count > most_common_count then
+                if count > most_common_rank_count then
                     most_common_s = suit
                 end
             end
 
-            local most_common_r, most_common_count = next(rank_counts)
+            local most_common_r, most_common_rank_count = next(rank_counts)
             for rank, count in next, rank_counts, most_common_r do
-                if count > most_common_count then
+                if count > most_common_rank_count then
                     most_common_r = rank
-                elseif count == most_common_count then
+                elseif count == most_common_rank_count then
                     if  rank > most_common_r then
                         most_common_r = rank
                     end
@@ -492,7 +519,7 @@ SMODS.Consumable({
 })
 
 SMODS.Consumable({
-    set = "Tarot", key = "diana", cost = 10, discovered = true,
+    set = "Tarot", key = "diana", cost = 6, discovered = true,
     atlas = "15C_tarot",
     pos = {
         x = 6,
@@ -544,7 +571,7 @@ SMODS.Consumable({
 })
 
 SMODS.Consumable({
-    set = "Tarot", key = "bacco", cost = 10, discovered = true,
+    set = "Tarot", key = "bacco", cost = 6, discovered = true,
     atlas = "15C_tarot",    
     pos = {
         x = 7,
@@ -642,7 +669,7 @@ SMODS.Challenge({
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_15Ctarot_bacco'}
+        {id = 'c_15Ctarot_pallas'}
     },
     vouchers = {
         {id = 'v_hieroglyph'},
