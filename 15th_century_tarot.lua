@@ -5,6 +5,20 @@ SMODS.Atlas {
     py = 95
 }
 
+-- turn a table into a string for printing 
+function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            s = s .. '['..k..'] = ' .. dump(v) .. ','
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
 SMODS.Consumable({
     set = "Tarot", key = "giove", cost = 6, discovered = true,
     atlas = "15C_tarot",
@@ -123,25 +137,16 @@ SMODS.Consumable({
         marz = true
     },
 
+    
     calculate = function(self, card, context)
-        if (context.drawing_cards 
-            or context.using_consumeable 
-            or context.playing_card_added 
-            or context.card_added 
+        if (
+            context.playing_card_added 
             or context.remove_playing_cards 
-            or context.destroy_card
-            or context.buying_card
-            or context.selling_card
-            or context.open_booster
-            or context.skipping_booster
-            or context.reroll_shop
-            or context.ending_shop
             or context.change_rank
-            or context.change_suit
-            or context.rank_increase) then 
-            sendDebugMessage("Now entering pallas calculate function (context check passed)", "PallasCalc")
-            local rank_counts = {} -- this will have keys 2 to 14 (A=14, K=13, Q=12, J=11)
+        ) then 
+            local rank_counts = {}
             local stones = nil
+
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
                     stones = stones or 0
@@ -153,24 +158,89 @@ SMODS.Consumable({
                 end
             end
 
+            --[[ 
+                context.playing_card_added, context.remove_playing_card, and context.change_rank are only active *while* 
+                cards are being added/removed/edited, so they don't recognise that the card has been added. Hence, 
+                below elseif statement is used to account for the added/removed/edited card later 
+            --]]
+            if context.playing_card_added then
+                for k,new_card in ipairs(context.cards) do
+                    rank_counts[new_card.base.id] = (rank_counts[new_card.base.id] or 0) + 1
+                end
+            elseif context.remove_playing_cards then
+                for k,removed_card in ipairs(context.removed) do
+                    rank_counts[removed_card.base.id] = rank_counts[removed_card.base.id] - 1
+                end
+            elseif context.change_rank then
+                rank_counts[context.new_rank] = (rank_counts[context.new_rank] or 0) + 1
+            end
+
+            -- -- DEBUG
+            -- if context.playing_card_added then
+            --     sendDebugMessage("CONTEXT: playing_card_added", "PallasCalc")
+            --     for k,new_card in ipairs(context.cards) do
+            --         sendDebugMessage("new_card.base.id = "..new_card.base.id, "PallasCalc")
+            --         sendDebugMessage("old rank_counts[new_card.base.id] = "..rank_counts[new_card.base.id], "PallasCalc")
+            --         rank_counts[new_card.base.id] = (rank_counts[new_card.base.id] or 0) + 1
+            --         sendDebugMessage("new rank_counts[new_card.base.id] = "..rank_counts[new_card.base.id], "PallasCalc")
+            --     end
+            -- elseif context.remove_playing_cards then
+            --     sendDebugMessage("CONTEXT: remove_playing_cards", "PallasCalc")
+            --     for k,removed_card in ipairs(context.removed) do
+            --         sendDebugMessage("removed_card.base.id = "..removed_card.base.id, "PallasCalc")
+            --         sendDebugMessage("old rank_counts[removed_card.base.id] = "..rank_counts[removed_card.base.id], "PallasCalc")
+            --         rank_counts[removed_card.base.id] = rank_counts[removed_card.base.id] - 1
+            --         sendDebugMessage("new rank_counts[removed_card.base.id] = "..rank_counts[removed_card.base.id], "PallasCalc")
+            --     end
+            -- elseif context.change_rank then
+            --     sendDebugMessage("CONTEXT: change_rank", "PallasCalc")
+            --     sendDebugMessage("context.new_rank = "..context.new_rank, "PallasCalc")
+            --     sendDebugMessage("old rank_counts[new_card.base.id] = "..rank_counts[context.new_rank], "PallasCalc")
+            --     rank_counts[context.new_rank] = (rank_counts[context.new_rank] or 0) + 1
+            --     sendDebugMessage("new rank_counts[context.new_rank] = "..rank_counts[context.new_rank], "PallasCalc")
+            -- else
+            --     sendErrorMessage("============== SHOULDN'T BE HERE ================", "PallasCalc")
+            -- end
+
             local most_common_rank, most_common_rank_count = next(rank_counts)
             for rank, count in next, rank_counts do
                 if count > most_common_rank_count then
-                    sendDebugMessage("count = "..count, "PallasCalc")
-                    sendDebugMessage("most_common_rank_count = "..most_common_rank_count, "PallasCalc")
                     most_common_rank = rank
-                    sendDebugMessage("Updated most_common_rank to "..rank, "PallasCalc")
-                    sendDebugMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
+                    most_common_rank_count = count
                 elseif count == most_common_rank_count then
-                    if  rank > most_common_rank then -- accounts for KQJA since we are using <playing_card>.base.id (an int), not <playing_card>.base.value (a string)
-                        sendDebugMessage("rank = "..rank, "PallasCalc")
-                        sendDebugMessage("most_common_rank = "..most_common_rank, "PallasCalc")
+                    if  rank > most_common_rank then
                         most_common_rank = rank
-                        sendDebugMessage("Updated most_common_rank to "..rank, "PallasCalc")
-                        sendDebugMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
                     end
                 end
             end
+
+            -- -- DEBUG
+            -- local most_common_rank, most_common_rank_count = next(rank_counts)
+            -- for rank, count in next, rank_counts do
+            --     if count > most_common_rank_count then
+            --         -- sendDebugMessage("", "PallasCalc")
+            --         -- sendDebugMessage("rank = "..rank, "PallasCalc")
+            --         -- sendDebugMessage("count = "..count, "PallasCalc")
+            --         -- sendDebugMessage("most_common_rank_count = "..most_common_rank_count, "PallasCalc")
+            --         most_common_rank = rank
+            --         most_common_rank_count = count
+            --         -- sendDebugMessage("Updated most_common_rank to "..rank, "PallasCalc")
+            --         -- sendDebugMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
+            --     elseif count == most_common_rank_count then
+            --         if  rank > most_common_rank then
+            --             -- sendWarnMessage("=============================================================", "PallasCalc")    
+            --             -- sendWarnMessage("================ COMPARING RANKS, NOT COUNTS ================", "PallasCalc")
+            --             -- sendWarnMessage("=============================================================", "PallasCalc")
+            --             -- sendWarnMessage("rank = "..rank, "PallasCalc")
+            --             -- sendWarnMessage("count = "..count, "PallasCalc")
+            --             -- sendWarnMessage("most_common_rank = "..most_common_rank, "PallasCalc")
+            --             -- sendWarnMessage("most_common_rank_count = "..most_common_rank_count, "PallasCalc")
+            --             most_common_rank = rank
+            --             -- sendWarnMessage("Updated most_common_rank to "..rank, "PallasCalc")
+            --             -- sendWarnMessage("most_common_rank = "..most_common_rank.." (should be "..rank..")", "PallasCalc")
+            --         end
+            --     end
+            -- end
             
             card.ability.consumeable.rank_conv = most_common_rank
             local rank_suffix = card.ability.consumeable.rank_conv
@@ -190,7 +260,6 @@ SMODS.Consumable({
             card.ability.consumeable.rank_conv_value = G.P_CARDS['H_'..rank_suffix].value
 
             sendDebugMessage("Current max card: "..card.ability.consumeable.rank_conv_value, "PallasCalc")
-
         end
     end,
 
@@ -273,8 +342,12 @@ SMODS.Consumable({
     end,
 
     calculate = function(self, card, context)
-        if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
-             local suit_counts = {
+       if (
+            context.playing_card_added 
+            or context.remove_playing_cards 
+            or context.change_suit
+        ) then 
+            local suit_counts = {
                         Spades = 0,
                         Hearts = 0,
                         Clubs = 0,
@@ -290,16 +363,40 @@ SMODS.Consumable({
                 else
                     for suit, count in pairs(suit_counts) do
                         if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
-                        -- removed the same as above^ that increased mod_suit_counts, not sure what the difference is
                     end
                 end
+            end
+
+            if context.playing_card_added then
+                sendDebugMessage("CONTEXT: playing_card_added", "VenusCalc")
+                for k,new_card in ipairs(context.cards) do
+                    sendDebugMessage("new_card.base.suit = "..new_card.base.suit, "VenusCalc")
+                    sendDebugMessage("old suit_counts[new_card.base.suit] = "..suit_counts[new_card.base.suit], "VenusCalc")
+                    suit_counts[new_card.base.suit] = (suit_counts[new_card.base.suit] or 0) + 1
+                    sendDebugMessage("new suit_counts[new_card.base.suit] = "..suit_counts[new_card.base.suit], "VenusCalc")
+                end
+            elseif context.remove_playing_cards then
+                sendDebugMessage("CONTEXT: remove_playing_cards", "VenusCalc")
+                for k,removed_card in ipairs(context.removed) do
+                    sendDebugMessage("removed_card.base.suit = "..removed_card.base.suit, "VenusCalc")
+                    sendDebugMessage("old suit_counts[removed_card.base.suit] = "..suit_counts[removed_card.base.suit], "VenusCalc")
+                    suit_counts[removed_card.base.suit] = suit_counts[removed_card.base.suit] - 1
+                    sendDebugMessage("new suit_counts[removed_card.base.suit] = "..suit_counts[removed_card.base.suit], "VenusCalc")
+                end
+            elseif context.change_suit then
+                sendDebugMessage("CONTEXT: change_suit", "VenusCalc")
+                sendDebugMessage("context.new_suit = "..context.new_suit, "VenusCalc")
+                sendDebugMessage("old suit_counts[context.new_suit] = "..suit_counts[context.new_suit], "VenusCalc")
+                suit_counts[context.new_suit] = (suit_counts[context.new_suit] or 0) + 1
+                sendDebugMessage("new suit_counts[context.new_suit] = "..suit_counts[context.new_suit], "VenusCalc")
             end
 
             local most_common_s, most_common_rank_count = next(suit_counts)
             for suit, count in next, suit_counts, most_common_s do
                 if count > most_common_rank_count then
+                    -- by not accounting for the == case, implicitly ranks suits by S > C > D > H 
+                        -- (not sure why it is this order though since is different to order in suit_counts, but could come from game so I won't change it in case it is incompatible otherwise)
                     most_common_s = suit
-                -- by not accounting for the == case, implicitly ranks suits by order in suit_counts (i.e S > H > C > D)
                 end
             end
             
@@ -652,27 +749,38 @@ SMODS.Challenge({
             {id = 'set_seed', value = 'SEEDEEDS'},
         },
         modifiers = {
-            {id = 'dollars', value = 100},
-            {id = 'discards', value = 1},
-            {id = 'hands', value = 6},
-            {id = 'reroll_cost', value = 10},
-            {id = 'joker_slots', value = 8},
-            {id = 'consumable_slots', value = 8},
-            {id = 'hand_size', value = 5},
+            {id = 'dollars', value = 9999},
+            {id = 'discards', value = 99},
+            {id = 'hands', value = 99},
+            {id = 'reroll_cost', value = 0},
+            {id = 'joker_slots', value = 99},
+            {id = 'consumable_slots', value = 99},
+            {id = 'hand_size', value = 20},
         }
     },
     jokers = {
-        {id = 'j_egg'},
+        {id = 'j_dna'},
         {id = 'j_egg'},
         {id = 'j_egg'},
         {id = 'j_egg'},
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_15Ctarot_pallas'}
+        {id = 'c_15Ctarot_venus'},
+        -- {id = 'c_strength'},
+        -- {id = 'c_tower'},
+        {id = 'c_death'},
+        {id = 'c_hanged_man'},
+        {id = 'c_hanged_man'},
+        {id = 'c_hanged_man'},
+        {id = 'c_hanged_man'},
+        {id = 'c_hanged_man'},
+        {id = 'c_hanged_man'},
+        -- {id = 'c_ouija'},
+        {id = 'c_sigil'}
     },
     vouchers = {
-        {id = 'v_hieroglyph'},
+        {id = 'v_magic_trick'}, 
     },
     deck = {
         -- enhancement = 'm_glass',
@@ -682,7 +790,7 @@ SMODS.Challenge({
         -- no_ranks = {['4'] = true},
         -- yes_suits = {H=true},
         -- no_suits = {D=true},
-        cards = {{s='D',r='2',e='m_glass',},{s='D',r='3',e='m_glass',},{s='D',r='4',e='m_glass',},{s='D',r='5',e='m_glass',},{s='D',r='6',e='m_glass',},{s='D',r='7',e='m_glass',},{s='D',r='8',e='m_glass',},{s='D',r='9',e='m_glass',},{s='D',r='T',e='m_glass',},{s='D',r='J',e='m_glass',},{s='D',r='Q',e='m_glass',},{s='D',r='K',e='m_glass',},{s='D',r='A',e='m_glass',},{s='C',r='2',e='m_glass',},{s='C',r='3',e='m_glass',},{s='C',r='4',e='m_glass',},{s='C',r='5',e='m_glass',},{s='C',r='6',e='m_glass',},{s='C',r='7',e='m_glass',},{s='C',r='8',e='m_glass',},{s='C',r='9',e='m_glass',},{s='C',r='T',e='m_glass',},{s='C',r='J',e='m_glass',},{s='C',r='Q',e='m_glass',},{s='C',r='K',e='m_glass',},{s='C',r='A',e='m_glass',},{s='H',r='2',e='m_glass',},{s='H',r='3',e='m_glass',},{s='H',r='4',e='m_glass',},{s='H',r='5',e='m_glass',},{s='H',r='6',e='m_glass',},{s='H',r='7',e='m_glass',},{s='H',r='8',e='m_glass',},{s='H',r='9',e='m_glass',},{s='H',r='T',e='m_glass',},{s='H',r='J',e='m_glass',},{s='H',r='Q',e='m_glass',},{s='H',r='K',e='m_glass',},{s='H',r='A',e='m_glass',},{s='S',r='2',e='m_glass',},{s='S',r='3',e='m_glass',},{s='S',r='4',e='m_glass',},{s='S',r='5',e='m_glass',},{s='S',r='6',e='m_glass',},{s='S',r='7',e='m_glass',},{s='S',r='8',e='m_glass',},{s='S',r='9',e='m_glass',},{s='S',r='T',e='m_glass',},{s='S',r='J',e='m_glass',},{s='S',r='Q',e='m_glass',},{s='S',r='K',e='m_glass',},{s='S',r='A',e='m_glass',},},
+        -- cards = {{s='D',r='2',e='m_glass',},{s='D',r='3',e='m_glass',},{s='D',r='4',e='m_glass',},{s='D',r='5',e='m_glass',},{s='D',r='6',e='m_glass',},{s='D',r='7',e='m_glass',},{s='D',r='8',e='m_glass',},{s='D',r='9',e='m_glass',},{s='D',r='T',e='m_glass',},{s='D',r='J',e='m_glass',},{s='D',r='Q',e='m_glass',},{s='D',r='K',e='m_glass',},{s='D',r='A',e='m_glass',},{s='C',r='2',e='m_glass',},{s='C',r='3',e='m_glass',},{s='C',r='4',e='m_glass',},{s='C',r='5',e='m_glass',},{s='C',r='6',e='m_glass',},{s='C',r='7',e='m_glass',},{s='C',r='8',e='m_glass',},{s='C',r='9',e='m_glass',},{s='C',r='T',e='m_glass',},{s='C',r='J',e='m_glass',},{s='C',r='Q',e='m_glass',},{s='C',r='K',e='m_glass',},{s='C',r='A',e='m_glass',},{s='H',r='2',e='m_glass',},{s='H',r='3',e='m_glass',},{s='H',r='4',e='m_glass',},{s='H',r='5',e='m_glass',},{s='H',r='6',e='m_glass',},{s='H',r='7',e='m_glass',},{s='H',r='8',e='m_glass',},{s='H',r='9',e='m_glass',},{s='H',r='T',e='m_glass',},{s='H',r='J',e='m_glass',},{s='H',r='Q',e='m_glass',},{s='H',r='K',e='m_glass',},{s='H',r='A',e='m_glass',},{s='S',r='2',e='m_glass',},{s='S',r='3',e='m_glass',},{s='S',r='4',e='m_glass',},{s='S',r='5',e='m_glass',},{s='S',r='6',e='m_glass',},{s='S',r='7',e='m_glass',},{s='S',r='8',e='m_glass',},{s='S',r='9',e='m_glass',},{s='S',r='T',e='m_glass',},{s='S',r='J',e='m_glass',},{s='S',r='Q',e='m_glass',},{s='S',r='K',e='m_glass',},{s='S',r='A',e='m_glass',},},
         type = 'Challenge Deck'
     },
     restrictions = {
