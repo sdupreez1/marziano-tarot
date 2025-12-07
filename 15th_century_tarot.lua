@@ -135,10 +135,7 @@ SMODS.Consumable({
 
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
-                    stones = stones or 0
-                end
-                if v.ability.effect == 'Stone Card' then
-                    stones = stones + 1
+                    stones = (stones or 0) + 1
                 else
                     rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
                 end
@@ -238,14 +235,14 @@ SMODS.Consumable({
             elseif rank_suffix == 14 then rank_suffix = 'A'
             end
 
-            sendDebugMessage("rank : count", "PallasCalc")
-            for k, v in next, rank_counts do
-                sendDebugMessage(k.." : "..v, "PallasCalc")
-            end
+            -- sendDebugMessage("rank : count", "PallasCalc")
+            -- for k, v in next, rank_counts do
+            --     sendDebugMessage(k.." : "..v, "PallasCalc")
+            -- end
 
             card.ability.consumeable.rank_conv_value = G.P_CARDS['H_'..rank_suffix].value
 
-            sendDebugMessage("Current max card: "..card.ability.consumeable.rank_conv_value, "PallasCalc")
+            -- sendDebugMessage("Current max card: "..card.ability.consumeable.rank_conv_value, "PallasCalc")
         end
     end,
 
@@ -342,10 +339,7 @@ SMODS.Consumable({
             local stones = nil
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
-                    stones = stones or 0
-                end
-                if v.ability.effect == 'Stone Card' then
-                    stones = stones + 1
+                    stones = (stones or 0) + 1
                 else
                     for suit, count in pairs(suit_counts) do
                         if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
@@ -377,16 +371,16 @@ SMODS.Consumable({
                 sendDebugMessage("new suit_counts[context.new_suit] = "..suit_counts[context.new_suit], "VenusCalc")
             end
 
-            local most_common_s, most_common_rank_count = next(suit_counts)
-            for suit, count in next, suit_counts, most_common_s do
+            local most_common_suit, most_common_rank_count = next(suit_counts)
+            for suit, count in next, suit_counts do
                 if count > most_common_rank_count then
                     -- by not accounting for the == case, implicitly ranks suits by S > C > D > H 
                         -- (not sure why it is this order though since is different to order in suit_counts, but could come from game so I won't change it in case it is incompatible otherwise)
-                    most_common_s = suit
+                    most_common_suit = suit
                 end
             end
             
-            card.ability.consumeable.suit_conv = most_common_s
+            card.ability.consumeable.suit_conv = most_common_suit
 
             return {
                 suit_conv = card.ability.suit_conv,
@@ -491,52 +485,65 @@ SMODS.Consumable({
     end,
 
     calculate = function(self, card, context)
-        if (context.drawing_cards or context.using_consumeable or context.playing_card_added or context.remove_playing_cards or context.destroy_card) then -- might need to add some variation of `and (context.cardarea == G.play)`
+       if (
+            context.playing_card_added 
+            or context.remove_playing_cards 
+            or context.change_suit
+        ) then 
              local suit_counts = {
-                        Spades = 0,
-                        Hearts = 0,
-                        Clubs = 0,
-                        Diamonds = 0
+                        Spades = {},
+                        Hearts = {},
+                        Clubs = {},
+                        Diamonds = {}
                     }
             local rank_counts = {}
             local stones = nil
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
-                    stones = stones or 0
-                end
-                if (v.area and v.area == G.deck) then -- removed  `or v.ability.wheel_flipped` from the if statement, not sure if it affects what gets counted
-                    if v.ability.effect == 'Stone Card' then
-                        stones = stones + 1
-                    else
-                        -- for suit, count in pairs(suit_counts) do
-                        --     if v.base.suit == suit then suit_counts[suit] = suit_counts[suit] + 1 end 
-                        -- end
-                        suit_counts[v.base.suit] = suit_counts[v.base.suit] + 1
-                        rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
-                    end
+                    stones = (stones or 0) + 1
+                else
+                    suit_counts[v.base.suit] = suit_counts[v.base.suit] + 1
+                    rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
                 end
             end
 
-            local most_common_s, most_common_rank_count = next(suit_counts)
-            for suit, count in next, suit_counts, most_common_s do
-                if count > most_common_rank_count then
-                    most_common_s = suit
+            if context.playing_card_added then
+                for k,new_card in ipairs(context.cards) do
+                    rank_counts[new_card.base.id] = (rank_counts[new_card.base.id] or 0) + 1
+                    suit_counts[new_card.base.suit] = (suit_counts[new_card.base.suit] or 0) + 1
+                end
+            elseif context.remove_playing_cards then
+                for k,removed_card in ipairs(context.removed) do
+                    rank_counts[removed_card.base.id] = rank_counts[removed_card.base.id] - 1
+                    suit_counts[removed_card.base.suit] = suit_counts[removed_card.base.suit] - 1
+                end
+            elseif context.change_rank then
+                rank_counts[context.new_rank] = (rank_counts[context.new_rank] or 0) + 1
+                suit_counts[context.new_rank] = (suit_counts[context.new_rank] or 0) + 1
+            end
+
+            local most_common_suit, most_common_suit_count = next(suit_counts)
+            for suit, count in next, suit_counts do
+                if count > most_common_suit_count then
+                    most_common_suit = suit
+                    most_common_suit_count = count
                 end
             end
 
-            local most_common_r, most_common_rank_count = next(rank_counts)
-            for rank, count in next, rank_counts, most_common_r do
+            local most_common_rank, most_common_rank_count = next(rank_counts)
+            for rank, count in ipairs(rank_counts) do
                 if count > most_common_rank_count then
-                    most_common_r = rank
+                    most_common_rank = rank
+                    most_common_rank_count = count
                 elseif count == most_common_rank_count then
-                    if  rank > most_common_r then
-                        most_common_r = rank
+                    if  rank > most_common_rank then
+                        most_common_rank = rank
                     end
                 end
             end
             
-            card.ability.consumeable.suit_conv = most_common_s
-            card.ability.consumeable.rank_conv = most_common_r
+            card.ability.consumeable.suit_conv = most_common_suit
+            card.ability.consumeable.rank_conv = most_common_rank
             local rank_suffix = card.ability.consumeable.rank_conv
             if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
             elseif rank_suffix == 10 then rank_suffix = 'T'
