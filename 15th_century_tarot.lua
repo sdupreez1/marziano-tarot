@@ -141,6 +141,7 @@ SMODS.Consumable({
                 end
             end
 
+            -- NON-VERBOSE
             --[[ 
                 context.playing_card_added, context.remove_playing_card, and context.change_rank are only active *while* 
                 cards are being added/removed/edited, so they don't recognise that the card has been added. Hence, 
@@ -158,7 +159,19 @@ SMODS.Consumable({
                 rank_counts[context.new_rank] = (rank_counts[context.new_rank] or 0) + 1
             end
 
-            -- -- DEBUG
+            local most_common_rank, most_common_rank_count = next(rank_counts)
+            for rank, count in next, rank_counts do
+                if count > most_common_rank_count then
+                    most_common_rank = rank
+                    most_common_rank_count = count
+                elseif count == most_common_rank_count then
+                    if  rank > most_common_rank then
+                        most_common_rank = rank
+                    end
+                end
+            end
+
+            -- -- VERBOSE
             -- if context.playing_card_added then
             --     sendDebugMessage("CONTEXT: playing_card_added", "PallasCalc")
             --     for k,new_card in ipairs(context.cards) do
@@ -185,19 +198,6 @@ SMODS.Consumable({
             --     sendErrorMessage("============== SHOULDN'T BE HERE ================", "PallasCalc")
             -- end
 
-            local most_common_rank, most_common_rank_count = next(rank_counts)
-            for rank, count in next, rank_counts do
-                if count > most_common_rank_count then
-                    most_common_rank = rank
-                    most_common_rank_count = count
-                elseif count == most_common_rank_count then
-                    if  rank > most_common_rank then
-                        most_common_rank = rank
-                    end
-                end
-            end
-
-            -- -- DEBUG
             -- local most_common_rank, most_common_rank_count = next(rank_counts)
             -- for rank, count in next, rank_counts do
             --     if count > most_common_rank_count then
@@ -299,6 +299,7 @@ SMODS.Consumable({
     end
 })
 
+-- Some issues with counting when DNA adds card to deck (DNA uses both change_suit and playing_card_added contexts to add new card)
 SMODS.Consumable({
     set = "Tarot", key = "venus", cost = 6, discovered = true,
     atlas = "15C_tarot",
@@ -317,7 +318,7 @@ SMODS.Consumable({
     },
     config = {
         max_highlighted = 3,
-        suit_conv = 'Spades',
+        suit_conv = 'Hearts',
         marz = true
     },    
     loc_vars = function(self, info_queue, card)
@@ -331,11 +332,11 @@ SMODS.Consumable({
             or context.change_suit
         ) then 
             local suit_counts = {
-                        Spades = 0,
-                        Hearts = 0,
-                        Clubs = 0,
-                        Diamonds = 0
-                    }
+                Hearts = 0,
+                Clubs = 0,
+                Diamonds = 0,
+                Spades = 0
+            }
             local stones = nil
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
@@ -374,8 +375,8 @@ SMODS.Consumable({
             local most_common_suit, most_common_rank_count = next(suit_counts)
             for suit, count in next, suit_counts do
                 if count > most_common_rank_count then
-                    -- by not accounting for the == case, implicitly ranks suits by S > C > D > H 
-                        -- (not sure why it is this order though since is different to order in suit_counts, but could come from game so I won't change it in case it is incompatible otherwise)
+                    -- by not accounting for the == case, implicitly ranks suits by H > C > D > S
+                        -- (seems like this is the implicit order used by the game)
                     most_common_suit = suit
                 end
             end
@@ -470,7 +471,7 @@ SMODS.Consumable({
     },
     config = {
         max_highlighted = 2,
-        suit_conv = 'Spades',
+        suit_conv = 'Hearts',
         rank_conv = 14,
         rank_conv_value = 'Ace',
         marz = true
@@ -489,61 +490,137 @@ SMODS.Consumable({
             context.playing_card_added 
             or context.remove_playing_cards 
             or context.change_suit
-        ) then 
+            or context.change_rank
+            or context.press_play
+        ) then -- maybe add a check for when game is started since otherwise if restarting a run, the previous most common card is still listed
              local suit_counts = {
-                        Spades = {},
-                        Hearts = {},
-                        Clubs = {},
-                        Diamonds = {}
-                    }
-            local rank_counts = {}
+                Hearts = {},
+                Clubs = {},
+                Diamonds = {},
+                Spades = {},
+            } -- should hard code suit priorities via some sort of enum rather than relying on a checking order
             local stones = nil
             for k, v in ipairs(G.playing_cards) do
                 if v.ability.effect == 'Stone Card' then
                     stones = (stones or 0) + 1
                 else
-                    suit_counts[v.base.suit] = suit_counts[v.base.suit] + 1
-                    rank_counts[v.base.id] = (rank_counts[v.base.id] or 0) + 1
+                    suit_counts[v.base.suit][v.base.id] = (suit_counts[v.base.suit][v.base.id] or 0) + 1
                 end
             end
 
             if context.playing_card_added then
+                sendDebugMessage("CONTEXT: playing_card_added", "NettunoCalc")
                 for k,new_card in ipairs(context.cards) do
-                    rank_counts[new_card.base.id] = (rank_counts[new_card.base.id] or 0) + 1
-                    suit_counts[new_card.base.suit] = (suit_counts[new_card.base.suit] or 0) + 1
+                    suit_counts[new_card.base.suit][new_card.base.id] = (suit_counts[new_card.base.suit][new_card.base.id] or 0) + 1
                 end
             elseif context.remove_playing_cards then
+                sendDebugMessage("CONTEXT: remove_playing_cards", "NettunoCalc")
                 for k,removed_card in ipairs(context.removed) do
-                    rank_counts[removed_card.base.id] = rank_counts[removed_card.base.id] - 1
-                    suit_counts[removed_card.base.suit] = suit_counts[removed_card.base.suit] - 1
+                    suit_counts[removed_card.base.suit][removed_card.base.id] = suit_counts[removed_card.base.suit][removed_card.base.id] - 1
                 end
             elseif context.change_rank then
-                rank_counts[context.new_rank] = (rank_counts[context.new_rank] or 0) + 1
-                suit_counts[context.new_rank] = (suit_counts[context.new_rank] or 0) + 1
-            end
-
-            local most_common_suit, most_common_suit_count = next(suit_counts)
-            for suit, count in next, suit_counts do
-                if count > most_common_suit_count then
-                    most_common_suit = suit
-                    most_common_suit_count = count
+                sendDebugMessage("CONTEXT: change_rank", "NettunoCalc")
+                -- context.other_card is the card whose rank is being changed
+                suit_counts[context.other_card.base.suit][context.new_rank] = (suit_counts[context.other_card.base.suit][context.new_rank] or 0) + 1
+            elseif context.change_suit then
+                sendDebugMessage("CONTEXT: change_suit", "NettunoCalc")
+                if context.other_card.base.id then -- nil check
+                    suit_counts[context.new_suit][context.other_card.base.id] = (suit_counts[context.other_card.base.suit][context.new_rank] or 0) + 1
                 end
+            elseif context.press_play then
+                sendDebugMessage("CONTEXT: press_play")
+            else
+                sendErrorMessage("NETTUNO CALCULATE FUNCTION RUNNING WITH UNSPECIFIED CONTEXT", "NettunoCalc")
             end
-
-            local most_common_rank, most_common_rank_count = next(rank_counts)
-            for rank, count in ipairs(rank_counts) do
-                if count > most_common_rank_count then
-                    most_common_rank = rank
-                    most_common_rank_count = count
-                elseif count == most_common_rank_count then
-                    if  rank > most_common_rank then
+        
+            local most_common = {
+                Hearts = {},
+                Clubs = {},
+                Diamonds = {},
+                Spades = {}
+            }
+            
+            -- -- NON-VERBOSE
+            -- for suit,rank_counts in next, suit_counts do
+            --     local most_common_rank, most_common_rank_count = next(rank_counts) or 0,0
+            --     for rank,count in next, rank_counts do
+            --         if count > most_common_rank_count then
+            --             most_common_rank = rank
+            --             most_common_rank_count = count
+            --         elseif count == most_common_rank_count then
+            --             if  rank > most_common_rank then
+            --                 most_common_rank = rank
+            --             end
+            --         end
+            --     end
+            --     most_common[suit][most_common_rank] = most_common_rank_count
+            -- end        
+            
+            -- local most_common_card_suit, most_common_card = next(most_common) or 'missing_suit',{0}
+            -- local most_common_card_rank, most_common_card_count = next(most_common_card)
+            -- for suit,suit_most_common in next, most_common do
+            --     local suit_most_common_rank, suit_most_common_count = next(suit_most_common) or 1,0 -- why is this always producing 0 for the count?
+            --     suit_most_common_count = suit_most_common[suit_most_common_rank]
+            --     if suit_most_common_count > most_common_card_count then
+            --         most_common_card_count = suit_most_common_count
+            --         most_common_card_rank = suit_most_common_rank
+            --         most_common_card_suit = suit
+            --     end
+            -- end            
+            
+            -- VERBOSE
+            for suit,rank_counts in next, suit_counts do
+                sendDebugMessage("", "NettunoCalc")
+                sendDebugMessage("===== "..suit.." =====", "NettunoCalc")
+                local most_common_rank, most_common_rank_count = next(rank_counts) or 0,0
+                for rank,count in next, rank_counts do
+                    sendDebugMessage("", "NettunoCalc")
+                    sendDebugMessage("rank = "..rank..", count = "..count, "NettunoCalc")
+                    sendDebugMessage("current most_common_rank = "..most_common_rank..", most_common_rank_count = "..most_common_rank_count, "NettunoCalc")
+                    if count > most_common_rank_count then
                         most_common_rank = rank
+                        most_common_rank_count = count
+                        sendDebugMessage("updated most_common_rank = "..most_common_rank..", most_common_rank_count = "..most_common_rank_count, "NettunoCalc")
+                    elseif count == most_common_rank_count then
+                        if  rank > most_common_rank then
+                            most_common_rank = rank
+                            sendDebugMessage("updated most_common_rank = "..most_common_rank..", most_common_rank_count = "..most_common_rank_count, "NettunoCalc")
+                        else
+                            sendDebugMessage("No changes made to most_common vars", "NettunoCalc")
+                        end
+                    else
+                        sendDebugMessage("No changes made to most_common vars", "NettunoCalc")
                     end
                 end
-            end
+                most_common[suit][most_common_rank] = most_common_rank_count
+                sendDebugMessage("most_common_rank_count = "..most_common_rank_count, "NettunoCalc")
+                sendDebugMessage("most_common["..suit.."]["..most_common_rank.."] = "..most_common[suit][most_common_rank], "NettunoCalc")
+            end        
             
-            card.ability.consumeable.suit_conv = most_common_suit
-            card.ability.consumeable.rank_conv = most_common_rank
+            local most_common_card_suit, most_common_card = next(most_common) or 'missing_suit',{0}
+            local most_common_card_rank, most_common_card_count = next(most_common_card)
+            for suit,suit_most_common in next, most_common do
+                sendDebugMessage("", "NettunoCalc")
+                local suit_most_common_rank, suit_most_common_count = next(suit_most_common) or 1,0 -- why is this always producing 0 for the count?
+                sendDebugMessage("Checking suit = "..suit..", rank = "..suit_most_common_rank..", count = "..suit_most_common_count, "NettunoCalc")
+                suit_most_common_count = suit_most_common[suit_most_common_rank]
+                sendDebugMessage("corrected suit_most_common_count = "..suit_most_common_count, "NettunoCalc")
+                sendDebugMessage("current most_common_card_suit = "..most_common_card_suit..", most_common_card_rank = "..most_common_card_rank..", most_common_card_count = "..most_common_card_count, "NettunoCalc")
+                if suit_most_common_count > most_common_card_count then
+                    most_common_card_count = suit_most_common_count
+                    most_common_card_rank = suit_most_common_rank
+                    most_common_card_suit = suit
+                    sendDebugMessage("updated most_common_card_suit = "..most_common_card_suit..", most_common_card_rank = "..most_common_card_rank..", most_common_card_count = "..most_common_card_count, "NettunoCalc")
+                else
+                    sendDebugMessage("No changes made to most_common_card vars", "NettunoCalc")
+                end
+            end
+      
+            sendDebugMessage("", "NettunoCalc")
+            card.ability.consumeable.suit_conv = most_common_card_suit
+            sendDebugMessage("updated card.ability.consumeable.suit_conv = "..card.ability.consumeable.suit_conv, "NettunoCalc")
+            card.ability.consumeable.rank_conv = most_common_card_rank
+            sendDebugMessage("updated card.ability.consumeable.rank_conv = "..card.ability.consumeable.rank_conv, "NettunoCalc")
             local rank_suffix = card.ability.consumeable.rank_conv
             if rank_suffix < 10 then rank_suffix = tostring(rank_suffix)
             elseif rank_suffix == 10 then rank_suffix = 'T'
@@ -748,28 +825,28 @@ SMODS.Challenge({
             {id = 'reroll_cost', value = 0},
             {id = 'joker_slots', value = 99},
             {id = 'consumable_slots', value = 99},
-            {id = 'hand_size', value = 20},
+            {id = 'hand_size', value = 10},
         }
     },
     jokers = {
         {id = 'j_dna'},
-        {id = 'j_egg'},
+        {id = 'j_trading'},
         {id = 'j_egg'},
         {id = 'j_egg'},
         {id = 'j_egg', edition = 'foil', eternal = true}
     },
     consumeables = {
-        {id = 'c_15Ctarot_venus'},
+        {id = 'c_15Ctarot_nettuno'},
         -- {id = 'c_strength'},
         -- {id = 'c_tower'},
-        {id = 'c_death'},
-        {id = 'c_hanged_man'},
-        {id = 'c_hanged_man'},
-        {id = 'c_hanged_man'},
-        {id = 'c_hanged_man'},
-        {id = 'c_hanged_man'},
-        {id = 'c_hanged_man'},
-        -- {id = 'c_ouija'},
+        -- {id = 'c_death'},
+        -- {id = 'c_hanged_man'},
+        -- {id = 'c_hanged_man'},
+        -- {id = 'c_hanged_man'},
+        -- {id = 'c_hanged_man'},
+        -- {id = 'c_hanged_man'},
+        -- {id = 'c_hanged_man'},
+        {id = 'c_ouija'},
         {id = 'c_sigil'}
     },
     vouchers = {
